@@ -827,6 +827,11 @@ public:
   TcpProxyTest() {
     ON_CALL(*factory_context_.access_log_manager_.file_, write(_))
         .WillByDefault(SaveArg<0>(&access_log_data_));
+    ON_CALL(filter_callbacks_.connection_.stream_info_, onUpstreamHostSelected(_))
+        .WillByDefault(Invoke(
+            [this](Upstream::HostDescriptionConstSharedPtr host) { upstream_host_ = host; }));
+    ON_CALL(filter_callbacks_.connection_.stream_info_, upstreamHost())
+        .WillByDefault(ReturnPointee(&upstream_host_));
   }
 
   ~TcpProxyTest() override {
@@ -904,8 +909,7 @@ public:
     }
 
     {
-      testing::InSequence sequence;
-      filter_ = std::make_unique<Filter>(config_, factory_context_.cluster_manager_, timeSystem());
+      filter_ = std::make_unique<Filter>(config_, factory_context_.cluster_manager_);
       EXPECT_CALL(filter_callbacks_.connection_, enableHalfClose(true));
       EXPECT_CALL(filter_callbacks_.connection_, readDisable(true));
       filter_->initializeReadFilterCallbacks(filter_callbacks_);
@@ -944,8 +948,8 @@ public:
 
   NiceMock<Server::Configuration::MockFactoryContext> factory_context_;
   ConfigSharedPtr config_;
-  std::unique_ptr<Filter> filter_;
   NiceMock<Network::MockReadFilterCallbacks> filter_callbacks_;
+  std::unique_ptr<Filter> filter_;
   std::vector<std::shared_ptr<NiceMock<Upstream::MockHost>>> upstream_hosts_{};
   std::vector<std::unique_ptr<NiceMock<Network::MockClientConnection>>> upstream_connections_{};
   std::vector<std::unique_ptr<NiceMock<Tcp::ConnectionPool::MockConnectionData>>>
@@ -957,6 +961,12 @@ public:
   StringViewSaver access_log_data_;
   Network::Address::InstanceConstSharedPtr upstream_local_address_;
   Network::Address::InstanceConstSharedPtr upstream_remote_address_;
+<<<<<<< HEAD
+=======
+  std::list<std::function<Tcp::ConnectionPool::Cancellable*(Tcp::ConnectionPool::Cancellable*)>>
+      new_connection_functions_;
+  Upstream::HostDescriptionConstSharedPtr upstream_host_{};
+>>>>>>> fade668c7e... Add upstream and downstream info in parent read callbacks in tcp too (#9949)
 };
 
 TEST_F(TcpProxyTest, DEPRECATED_FEATURE_TEST(DefaultRoutes)) {
@@ -1217,7 +1227,7 @@ TEST_F(TcpProxyTest, DEPRECATED_FEATURE_TEST(RouteWithMetadataMatch)) {
       {Envoy::Config::MetadataFilters::get().ENVOY_LB, metadata_struct});
 
   configure(config);
-  filter_ = std::make_unique<Filter>(config_, factory_context_.cluster_manager_, timeSystem());
+  filter_ = std::make_unique<Filter>(config_, factory_context_.cluster_manager_);
   filter_->initializeReadFilterCallbacks(filter_callbacks_);
   EXPECT_EQ(Network::FilterStatus::StopIteration, filter_->onNewConnection());
 
@@ -1265,7 +1275,7 @@ TEST_F(TcpProxyTest, WeightedClusterWithMetadataMatch) {
   v2.set_string_value("v2");
   HashedValue hv0(v0), hv1(v1), hv2(v2);
 
-  filter_ = std::make_unique<Filter>(config_, factory_context_.cluster_manager_, timeSystem());
+  filter_ = std::make_unique<Filter>(config_, factory_context_.cluster_manager_);
   filter_->initializeReadFilterCallbacks(filter_callbacks_);
 
   // Expect filter to try to open a connection to cluster1.
@@ -1319,7 +1329,7 @@ TEST_F(TcpProxyTest, WeightedClusterWithMetadataMatch) {
 
 TEST_F(TcpProxyTest, DEPRECATED_FEATURE_TEST(DisconnectBeforeData)) {
   configure(defaultConfig());
-  filter_ = std::make_unique<Filter>(config_, factory_context_.cluster_manager_, timeSystem());
+  filter_ = std::make_unique<Filter>(config_, factory_context_.cluster_manager_);
   filter_->initializeReadFilterCallbacks(filter_callbacks_);
 
   filter_callbacks_.connection_.raiseEvent(Network::ConnectionEvent::RemoteClose);
@@ -1358,7 +1368,7 @@ TEST_F(TcpProxyTest, DEPRECATED_FEATURE_TEST(UpstreamConnectionLimit)) {
       0, 0, 0, 0, 0);
 
   // setup sets up expectation for tcpConnForCluster but this test is expected to NOT call that
-  filter_ = std::make_unique<Filter>(config_, factory_context_.cluster_manager_, timeSystem());
+  filter_ = std::make_unique<Filter>(config_, factory_context_.cluster_manager_);
   // The downstream connection closes if the proxy can't make an upstream connection.
   EXPECT_CALL(filter_callbacks_.connection_, close(Network::ConnectionCloseType::NoFlush));
   filter_->initializeReadFilterCallbacks(filter_callbacks_);
@@ -1694,6 +1704,42 @@ TEST_F(TcpProxyTest, DEPRECATED_FEATURE_TEST(UpstreamFlushReceiveUpstreamData)) 
   upstream_callbacks_->onUpstreamData(buffer, false);
 }
 
+<<<<<<< HEAD
+=======
+// Tests that downstream connection can access upstream connections filter state.
+TEST_F(TcpProxyTest, ShareFilterState) {
+  setup(1);
+
+  upstream_connections_.at(0)->streamInfo().filterState()->setData(
+      "envoy.tcp_proxy.cluster", std::make_unique<PerConnectionCluster>("filter_state_cluster"),
+      StreamInfo::FilterState::StateType::Mutable,
+      StreamInfo::FilterState::LifeSpan::DownstreamConnection);
+  raiseEventUpstreamConnected(0);
+  EXPECT_EQ("filter_state_cluster",
+            filter_callbacks_.connection_.streamInfo()
+                .upstreamFilterState()
+                ->getDataReadOnly<PerConnectionCluster>("envoy.tcp_proxy.cluster")
+                .value());
+}
+
+// Tests that filter callback can access downstream and upstream address and ssl properties.
+TEST_F(TcpProxyTest, AccessDownstreamAndUpstreamProperties) {
+  setup(1);
+
+  raiseEventUpstreamConnected(0);
+  EXPECT_EQ(filter_callbacks_.connection().streamInfo().downstreamLocalAddress(),
+            filter_callbacks_.connection().localAddress());
+  EXPECT_EQ(filter_callbacks_.connection().streamInfo().downstreamRemoteAddress(),
+            filter_callbacks_.connection().remoteAddress());
+  EXPECT_EQ(filter_callbacks_.connection().streamInfo().downstreamSslConnection(),
+            filter_callbacks_.connection().ssl());
+  EXPECT_EQ(filter_callbacks_.connection().streamInfo().upstreamLocalAddress(),
+            upstream_connections_.at(0)->localAddress());
+  EXPECT_EQ(filter_callbacks_.connection().streamInfo().upstreamSslConnection(),
+            upstream_connections_.at(0)->streamInfo().downstreamSslConnection());
+}
+
+>>>>>>> fade668c7e... Add upstream and downstream info in parent read callbacks in tcp too (#9949)
 class TcpProxyRoutingTest : public testing::Test {
 public:
   TcpProxyRoutingTest() = default;
@@ -1714,7 +1760,7 @@ public:
   void initializeFilter() {
     EXPECT_CALL(filter_callbacks_, connection()).WillRepeatedly(ReturnRef(connection_));
 
-    filter_ = std::make_unique<Filter>(config_, factory_context_.cluster_manager_, timeSystem());
+    filter_ = std::make_unique<Filter>(config_, factory_context_.cluster_manager_);
     filter_->initializeReadFilterCallbacks(filter_callbacks_);
   }
 
@@ -1774,6 +1820,7 @@ TEST_F(TcpProxyRoutingTest, DEPRECATED_FEATURE_TEST(UseClusterFromPerConnectionC
   setup();
   initializeFilter();
 
+<<<<<<< HEAD
   NiceMock<StreamInfo::MockStreamInfo> stream_info;
   stream_info.filterState().setData("envoy.tcp_proxy.cluster",
                                     std::make_unique<PerConnectionCluster>("filter_state_cluster"),
@@ -1781,6 +1828,12 @@ TEST_F(TcpProxyRoutingTest, DEPRECATED_FEATURE_TEST(UseClusterFromPerConnectionC
                                     StreamInfo::FilterState::LifeSpan::DownstreamConnection);
   ON_CALL(connection_, streamInfo()).WillByDefault(ReturnRef(stream_info));
   EXPECT_CALL(Const(connection_), streamInfo()).WillRepeatedly(ReturnRef(stream_info));
+=======
+  connection_.streamInfo().filterState()->setData(
+      "envoy.tcp_proxy.cluster", std::make_unique<PerConnectionCluster>("filter_state_cluster"),
+      StreamInfo::FilterState::StateType::Mutable,
+      StreamInfo::FilterState::LifeSpan::DownstreamConnection);
+>>>>>>> fade668c7e... Add upstream and downstream info in parent read callbacks in tcp too (#9949)
 
   // Expect filter to try to open a connection to specified cluster.
   EXPECT_CALL(factory_context_.cluster_manager_,
@@ -1795,6 +1848,7 @@ TEST_F(TcpProxyRoutingTest, DEPRECATED_FEATURE_TEST(UpstreamServerName)) {
   setup();
   initializeFilter();
 
+<<<<<<< HEAD
   NiceMock<StreamInfo::MockStreamInfo> stream_info;
   stream_info.filterState().setData("envoy.network.upstream_server_name",
                                     std::make_unique<UpstreamServerName>("www.example.com"),
@@ -1803,6 +1857,12 @@ TEST_F(TcpProxyRoutingTest, DEPRECATED_FEATURE_TEST(UpstreamServerName)) {
 
   ON_CALL(connection_, streamInfo()).WillByDefault(ReturnRef(stream_info));
   EXPECT_CALL(Const(connection_), streamInfo()).WillRepeatedly(ReturnRef(stream_info));
+=======
+  connection_.streamInfo().filterState()->setData(
+      "envoy.network.upstream_server_name", std::make_unique<UpstreamServerName>("www.example.com"),
+      StreamInfo::FilterState::StateType::ReadOnly,
+      StreamInfo::FilterState::LifeSpan::DownstreamConnection);
+>>>>>>> fade668c7e... Add upstream and downstream info in parent read callbacks in tcp too (#9949)
 
   // Expect filter to try to open a connection to a cluster with the transport socket options with
   // override-server-name
@@ -1830,15 +1890,16 @@ TEST_F(TcpProxyRoutingTest, DEPRECATED_FEATURE_TEST(ApplicationProtocols)) {
   setup();
   initializeFilter();
 
+<<<<<<< HEAD
   NiceMock<StreamInfo::MockStreamInfo> stream_info;
   stream_info.filterState().setData(
+=======
+  connection_.streamInfo().filterState()->setData(
+>>>>>>> fade668c7e... Add upstream and downstream info in parent read callbacks in tcp too (#9949)
       Network::ApplicationProtocols::key(),
       std::make_unique<Network::ApplicationProtocols>(std::vector<std::string>{"foo", "bar"}),
       StreamInfo::FilterState::StateType::ReadOnly,
       StreamInfo::FilterState::LifeSpan::DownstreamConnection);
-
-  ON_CALL(connection_, streamInfo()).WillByDefault(ReturnRef(stream_info));
-  EXPECT_CALL(Const(connection_), streamInfo()).WillRepeatedly(ReturnRef(stream_info));
 
   // Expect filter to try to open a connection to a cluster with the transport socket options with
   // override-application-protocol
@@ -1881,7 +1942,7 @@ public:
   void initializeFilter() {
     EXPECT_CALL(filter_callbacks_, connection()).WillRepeatedly(ReturnRef(connection_));
 
-    filter_ = std::make_unique<Filter>(config_, factory_context_.cluster_manager_, timeSystem());
+    filter_ = std::make_unique<Filter>(config_, factory_context_.cluster_manager_);
     filter_->initializeReadFilterCallbacks(filter_callbacks_);
   }
 
