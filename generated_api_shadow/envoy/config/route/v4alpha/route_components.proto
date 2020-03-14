@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package envoy.config.route.v4alpha;
 
+import "envoy/config/common/accesslog/v4alpha/common.proto";
 import "envoy/config/core/v4alpha/base.proto";
 import "envoy/config/core/v4alpha/extension.proto";
 import "envoy/config/core/v4alpha/proxy_protocol.proto";
@@ -1273,6 +1274,10 @@ message DirectResponseAction {
   //   :ref:`envoy_api_msg_config.route.v4alpha.Route`, :ref:`envoy_api_msg_config.route.v4alpha.RouteConfiguration` or
   //   :ref:`envoy_api_msg_config.route.v4alpha.VirtualHost`.
   core.v4alpha.DataSource body = 2;
+
+  // Specifies the access log response flags to record after sending the response.
+  // If the value is set, it must be a valid `%RESPONSE_FLAGS%`` from access log.
+  common.accesslog.v4alpha.ResponseFlagFilter response_flag = 3;
 }
 
 message Decorator {

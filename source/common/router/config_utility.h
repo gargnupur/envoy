@@ -8,6 +8,7 @@
 #include "envoy/config/route/v3/route_components.pb.h"
 #include "envoy/http/codes.h"
 #include "envoy/json/json_object.h"
+#include "envoy/stream_info/stream_info.h"
 #include "envoy/upstream/resource_manager.h"
 
 #include "common/common/empty_string.h"
@@ -16,6 +17,7 @@
 #include "common/http/headers.h"
 #include "common/http/utility.h"
 #include "common/protobuf/utility.h"
+#include "common/stream_info/utility.h"
 
 #include "absl/types/optional.h"
 
@@ -75,13 +77,22 @@ public:
 
   /**
    * Returns the HTTP Status Code enum parsed from the route's redirect or direct_response.
-   * @param route supplies the Route configuration.
+   * @param route supplies the route configuration.
    * @return absl::optional<Http::Code> the HTTP status from the route's direct_response if
    * specified, or the HTTP status code from the route's redirect if specified, or an empty
    * absl::optional otherwise.
    */
   static absl::optional<Http::Code>
   parseDirectResponseCode(const envoy::config::route::v3::Route& route);
+
+  /**
+   * Returns ResponseFlag enums parsed from the route's direct_response.
+   * @param route supplies the Route configuration.
+   * @return absl::optional<std::vector<StreamInfo::ResponseFlag>> ResponseFlag from the route's
+   * direct_response if specified, or an empty absl::optional otherwise.
+   */
+  static absl::optional<std::vector<StreamInfo::ResponseFlag>>
+  parseDirectResponseFlag(const envoy::config::route::v3::Route& route);
 
   /**
    * Returns the content of the response body to send with direct responses from a route.
