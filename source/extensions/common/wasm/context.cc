@@ -309,12 +309,12 @@ WasmResult serializeValue(Filters::Common::Expr::CelValue value, std::string* re
     return WasmResult::Ok;
   case CelValue::Type::kInt64: {
     auto out = value.Int64OrDie();
-    result->assign(reinterpret_cast<const char*>(&out), sizeof(int64_t));
+    result->assign(std::to_string(out));
     return WasmResult::Ok;
   }
   case CelValue::Type::kUint64: {
     auto out = value.Uint64OrDie();
-    result->assign(reinterpret_cast<const char*>(&out), sizeof(uint64_t));
+    result->assign(std::to_string(out));
     return WasmResult::Ok;
   }
   case CelValue::Type::kDouble: {
